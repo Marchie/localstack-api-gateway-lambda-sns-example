@@ -11,20 +11,47 @@ import (
 	"time"
 )
 
-// resetEnv is a test helper to reset an environment variable to its previous state.
-func resetEnv(t *testing.T, key string, exists bool, originalValue string) {
+// setEnv is a test helper to set up the environment for a test.
+// It returns a function that should be called to reset the environment back to its original state
+func setEnv(t *testing.T, envMap map[string]*string) (resetEnvFunc func()) {
 	t.Helper()
 
-	if exists {
-		if err := os.Setenv(key, originalValue); err != nil {
-			t.Error(err)
+	originalValues := make(map[string]*string)
+
+	for key, valueToSet := range envMap {
+		originalValue, exists := os.LookupEnv(key)
+
+		if exists {
+			originalValues[key] = &originalValue
+		} else {
+			originalValues[key] = nil
 		}
 
-		return
+		if valueToSet != nil {
+			if err := os.Setenv(key, *valueToSet); err != nil {
+				t.Error(err)
+			}
+		} else {
+			if err := os.Unsetenv(key); err != nil {
+				t.Error(err)
+			}
+		}
+
 	}
 
-	if err := os.Unsetenv(key); err != nil {
-		t.Error(err)
+	return func() {
+		for key, originalValue := range originalValues {
+			if originalValue != nil {
+				if err := os.Setenv(key, *originalValue); err != nil {
+					t.Error(err)
+				}
+				continue
+			}
+
+			if err := os.Unsetenv(key); err != nil {
+				t.Error(err)
+			}
+		}
 	}
 }
 
@@ -33,7 +60,16 @@ func TestNewConfig(t *testing.T) {
 when NewConfig() is called
 then an error is returned`, func(t *testing.T) {
 		// Given
-		// No configuration
+		envMap := map[string]*string{
+			"AWS_REGION":            nil,
+			"AWS_ACCESS_KEY_ID":     nil,
+			"AWS_SECRET_ACCESS_KEY": nil,
+			"REDIS_SERVER_ADDRESS":  nil,
+			"SNS_TOPIC_ARN":         nil,
+		}
+
+		resetEnvFunc := setEnv(t, envMap)
+		defer resetEnvFunc()
 
 		// When
 		_, err := NewConfig()
@@ -44,7 +80,10 @@ then an error is returned`, func(t *testing.T) {
 		}
 
 		expErrMsg :=
-			`envvar: Missing required environment variable: REDIS_SERVER_ADDRESS
+			`envvar: Missing required environment variable: AWS_REGION
+envvar: Missing required environment variable: AWS_ACCESS_KEY_ID
+envvar: Missing required environment variable: AWS_SECRET_ACCESS_KEY
+envvar: Missing required environment variable: REDIS_SERVER_ADDRESS
 envvar: Missing required environment variable: SNS_TOPIC_ARN`
 
 		if err.Error() != expErrMsg {
@@ -56,23 +95,22 @@ envvar: Missing required environment variable: SNS_TOPIC_ARN`
 when NewConfig() is called
 then a Config is returned`, func(t *testing.T) {
 		// Given
-		redisServerAddressKey := "REDIS_SERVER_ADDRESS"
-		originalValue, exists := os.LookupEnv(redisServerAddressKey)
-		defer resetEnv(t, redisServerAddressKey, exists, originalValue)
-
+		awsRegion := "us-east-1"
+		awsAccessKeyId := "test"
+		awsSecretAccessKey := "test"
 		redisServerAddress := "localhost:6379"
-		if err := os.Setenv(redisServerAddressKey, redisServerAddress); err != nil {
-			t.Fatal(err)
-		}
-
-		snsTopicArnKey := "SNS_TOPIC_ARN"
-		originalValue, exists = os.LookupEnv(snsTopicArnKey)
-		defer resetEnv(t, snsTopicArnKey, exists, originalValue)
-
 		snsTopicArn := "arn:aws:sns:us-east-1:000000000000:mytopic"
-		if err := os.Setenv(snsTopicArnKey, snsTopicArn); err != nil {
-			t.Fatal(err)
+
+		envMap := map[string]*string{
+			"AWS_REGION":            &awsRegion,
+			"AWS_ACCESS_KEY_ID":     &awsAccessKeyId,
+			"AWS_SECRET_ACCESS_KEY": &awsSecretAccessKey,
+			"REDIS_SERVER_ADDRESS":  &redisServerAddress,
+			"SNS_TOPIC_ARN":         &snsTopicArn,
 		}
+
+		resetEnvFunc := setEnv(t, envMap)
+		defer resetEnvFunc()
 
 		// When
 		cfg, err := NewConfig()
@@ -103,23 +141,22 @@ then a configured redis.Pool is returned`, func(t *testing.T) {
 		}
 		defer s.Close()
 
-		redisServerAddressKey := "REDIS_SERVER_ADDRESS"
-		originalValue, exists := os.LookupEnv(redisServerAddressKey)
-		defer resetEnv(t, redisServerAddressKey, exists, originalValue)
-
+		awsRegion := "us-east-1"
+		awsAccessKeyId := "test"
+		awsSecretAccessKey := "test"
 		redisServerAddress := s.Addr()
-		if err := os.Setenv(redisServerAddressKey, redisServerAddress); err != nil {
-			t.Fatal(err)
-		}
-
-		snsTopicArnKey := "SNS_TOPIC_ARN"
-		originalValue, exists = os.LookupEnv(snsTopicArnKey)
-		defer resetEnv(t, snsTopicArnKey, exists, originalValue)
-
 		snsTopicArn := "arn:aws:sns:us-east-1:000000000000:mytopic"
-		if err := os.Setenv(snsTopicArnKey, snsTopicArn); err != nil {
-			t.Fatal(err)
+
+		envMap := map[string]*string{
+			"AWS_REGION":            &awsRegion,
+			"AWS_ACCESS_KEY_ID":     &awsAccessKeyId,
+			"AWS_SECRET_ACCESS_KEY": &awsSecretAccessKey,
+			"REDIS_SERVER_ADDRESS":  &redisServerAddress,
+			"SNS_TOPIC_ARN":         &snsTopicArn,
 		}
+
+		resetEnvFunc := setEnv(t, envMap)
+		defer resetEnvFunc()
 
 		cfg, err := NewConfig()
 		if err != nil {
@@ -163,41 +200,24 @@ then a configured SNS client is returned`, func(t *testing.T) {
 		}))
 		defer fakeSns.Close()
 
-		redisServerAddressKey := "REDIS_SERVER_ADDRESS"
-		originalValue, exists := os.LookupEnv(redisServerAddressKey)
-		defer resetEnv(t, redisServerAddressKey, exists, originalValue)
-
-		redisServerAddress := "localhost:6379"
-		if err := os.Setenv(redisServerAddressKey, redisServerAddress); err != nil {
-			t.Fatal(err)
-		}
-
-		awsEndpointKey := "AWS_ENDPOINT"
-		originalValue, exists = os.LookupEnv(awsEndpointKey)
-		defer resetEnv(t, awsEndpointKey, exists, originalValue)
-
 		awsEndpoint := fakeSns.URL
-		if err := os.Setenv(awsEndpointKey, awsEndpoint); err != nil {
-			t.Fatal(err)
-		}
-
-		awsRegionKey := "AWS_REGION"
-		originalValue, exists = os.LookupEnv(awsRegionKey)
-		defer resetEnv(t, awsRegionKey, exists, originalValue)
-
 		awsRegion := "us-east-1"
-		if err := os.Setenv(awsRegionKey, awsRegion); err != nil {
-			t.Fatal(err)
-		}
-
-		snsTopicArnKey := "SNS_TOPIC_ARN"
-		originalValue, exists = os.LookupEnv(snsTopicArnKey)
-		defer resetEnv(t, snsTopicArnKey, exists, originalValue)
-
+		awsAccessKeyId := "test"
+		awsSecretAccessKey := "test"
+		redisServerAddress := "localhost:6379"
 		snsTopicArn := "arn:aws:sns:us-east-1:000000000000:mytopic"
-		if err := os.Setenv(snsTopicArnKey, snsTopicArn); err != nil {
-			t.Fatal(err)
+
+		envMap := map[string]*string{
+			"AWS_ENDPOINT":          &awsEndpoint,
+			"AWS_REGION":            &awsRegion,
+			"AWS_ACCESS_KEY_ID":     &awsAccessKeyId,
+			"AWS_SECRET_ACCESS_KEY": &awsSecretAccessKey,
+			"REDIS_SERVER_ADDRESS":  &redisServerAddress,
+			"SNS_TOPIC_ARN":         &snsTopicArn,
 		}
+
+		resetEnvFunc := setEnv(t, envMap)
+		defer resetEnvFunc()
 
 		cfg, err := NewConfig()
 		if err != nil {

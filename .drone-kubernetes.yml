@@ -1,0 +1,102 @@
+kind: pipeline
+name: default
+type: kubernetes
+
+platform:
+  os: linux
+  arch: amd64
+
+services:
+  - name: docker
+    image: docker:dind
+    privileged: true
+    network_mode: host
+    volumes:
+      - name: dockersock
+        path: /var/run
+      - name: tempdir
+        path: /tmp
+
+  - name: localstack
+    image: localstack/localstack:latest
+    depends_on:
+      - docker
+    environment:
+      SERVICES: apigateway,lambda,sns
+      DEBUG: 0
+      LAMBDA_EXECUTOR: docker
+    volumes:
+      - name: dockersock
+        path: /var/run
+      - name: tempdir
+        path: /tmp
+
+  - name: redis
+    image: redis:alpine
+
+steps:
+  - name: unit_tests
+    image: golang
+    environment:
+      GOOS: linux
+      GOARCH: amd64
+      CGO_ENABLED: 1
+    volumes:
+      - name: godeps
+        path: /go
+    commands:
+      - go test -timeout=15s -race ./...
+
+  - name: build
+    image: golang
+    environment:
+      GOOS: linux
+      GOARCH: amd64
+      CGO_ENABLED: 0
+    volumes:
+      - name: godeps
+        path: /go
+    commands:
+      - rm -rf ./builds
+      - mkdir -p ./builds
+      - go build -o ./builds/app -ldflags="-s -w" main.go
+
+  - name: create_lambda_deployment_package
+    image: alpine
+    commands:
+      - apk add --no-cache zip
+      - zip -j ./builds/app.zip ./builds/app
+
+  - name: integration_test
+    image: golang
+    environment:
+      GOOS: linux
+      GOARCH: amd64
+      CGO_ENABLED: 0
+      # App environment
+      AWS_ENDPOINT: :4566
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      REDIS_SERVER_ADDRESS: :6379
+      SNS_TOPIC_ARN: will_be_overwritten_by_functional_test
+      # Test environment
+      TEST_AWS_ENDPOINT: http://localhost:4566
+      TEST_REDIS_SERVER_ADDRESS: localhost:6379
+      TEST_SNS_TOPIC_CONSUMER_ENDPOINT: http://localhost:8080
+      TEST_LAMBDA_FUNCTION_CODE_PATH: ../builds/app.zip
+      TEST_LAMBDA_HANDLER: app
+    volumes:
+      - name: godeps
+        path: /go
+    commands:
+      - export KUBERNETES_POD_ID=$(hostname -i)
+      - go test -v --tags="integration" -run TestAppIntegration ./app/.
+
+volumes:
+  - name: dockersock
+    temp: {}
+  - name: tempdir
+    temp: {}
+  - name: godeps
+    temp: {}

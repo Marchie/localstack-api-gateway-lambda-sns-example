@@ -11,6 +11,9 @@ import (
 
 type Config struct {
 	AWSEndpoint        string `envvar:"AWS_ENDPOINT" default:""`
+	AWSRegion          string `envvar:"AWS_REGION"`
+	AWSAccessKeyID     string `envvar:"AWS_ACCESS_KEY_ID"`
+	AWSSecretAccessKey string `envvar:"AWS_SECRET_ACCESS_KEY"`
 	RedisServerAddress string `envvar:"REDIS_SERVER_ADDRESS"`
 	SNSTopicARN        string `envvar:"SNS_TOPIC_ARN"`
 }

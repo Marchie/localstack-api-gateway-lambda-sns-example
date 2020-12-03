@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  localstack:
+    image: localstack/localstack:latest
+    networks:
+      - testnet
+    environment:
+      SERVICES: apigateway,lambda,sns
+      DEBUG: 0
+      LAMBDA_EXECUTOR: docker
+      LAMBDA_DOCKER_NETWORK: localstack-api-gateway-lambda-sns-example_testnet
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - localstack_tmp:/tmp/localstack
+
+  redis:
+    image: redis:alpine
+    networks:
+      - testnet
+
+  build_and_test:
+    image: golang:alpine
+    networks:
+      - testnet
+    environment:
+      GOOS: linux
+      GOARCH: amd64
+      CGO_ENABLED: 0
+      # App environment
+      AWS_ENDPOINT: http://localstack:4566
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      REDIS_SERVER_ADDRESS: redis:6379
+      SNS_TOPIC_ARN: will_be_overwritten_by_functional_test
+      # Test environment
+      TEST_AWS_ENDPOINT: http://localstack:4566
+      TEST_REDIS_SERVER_ADDRESS: redis:6379
+      TEST_SNS_TOPIC_CONSUMER_ENDPOINT: http://build_and_test:8080
+      TEST_LAMBDA_FUNCTION_CODE_PATH: ../builds/app.zip
+      TEST_LAMBDA_HANDLER: app
+    volumes:
+      - ./:/src
+    command: >
+      sh -c "apk add git zip &&
+        cd /src &&
+        go test -v ./... &&
+        rm -rf ./builds &&
+        mkdir -p ./builds &&
+        go build -o ./builds/app -ldflags=\"-s -w\" main.go &&
+        zip -j ./builds/app.zip ./builds/app &&
+        go test -v --tags=\"integration\" -run TestAppIntegration ./app/..."
+
+networks:
+  testnet:
+    driver: bridge
+
+volumes:
+  localstack_tmp:
