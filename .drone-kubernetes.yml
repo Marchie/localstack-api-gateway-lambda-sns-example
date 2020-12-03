@@ -9,7 +9,6 @@ platform:
 services:
   - name: docker
     image: docker:dind
-    privileged: true
     network_mode: host
     volumes:
       - name: dockersock
