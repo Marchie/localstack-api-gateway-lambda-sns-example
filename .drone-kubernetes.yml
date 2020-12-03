@@ -48,6 +48,8 @@ steps:
 
   - name: build
     image: golang
+    depends_on:
+      - unit_tests
     environment:
       GOOS: linux
       GOARCH: amd64
@@ -62,12 +64,18 @@ steps:
 
   - name: create_lambda_deployment_package
     image: alpine
+    depends_on:
+      - build
     commands:
       - apk add --no-cache zip
       - zip -j ./builds/app.zip ./builds/app
 
   - name: integration_test
     image: golang
+    depends_on:
+      - localstack
+      - redis
+      - create_lambda_deployment_package
     environment:
       GOOS: linux
       GOARCH: amd64
