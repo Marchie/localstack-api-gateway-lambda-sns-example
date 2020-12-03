@@ -20,6 +20,7 @@ services:
     image: localstack/localstack:latest
     depends_on:
       - docker
+      - unit_tests
     environment:
       SERVICES: apigateway,lambda,sns
       DEBUG: 0
