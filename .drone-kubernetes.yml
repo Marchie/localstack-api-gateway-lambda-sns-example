@@ -98,7 +98,7 @@ steps:
       - name: godeps
         path: /go
     commands:
-      - export KUBERNETES_POD_ID=$(hostname -i)
+      - export KUBERNETES_POD_IP=$(hostname -i)
       - go test -v --tags="integration" -run TestAppIntegration ./app/.
 
 volumes:
