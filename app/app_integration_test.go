@@ -35,7 +35,7 @@ type config struct {
 	TestEnabled                               bool          `envvar:"TEST_ENABLED" default:"false"`
 	AWSEndpoint                               string        `envvar:"TEST_AWS_ENDPOINT"`
 	RedisServerAddress                        string        `envvar:"TEST_REDIS_SERVER_ADDRESS"`
-	TestTimeout                               time.Duration `envvar:"TEST_TIMEOUT" default:"15s"`
+	TestTimeout                               time.Duration `envvar:"TEST_TIMEOUT" default:"30s"`
 	SNSTopicConsumerEndpoint                  string        `envvar:"TEST_SNS_TOPIC_CONSUMER_ENDPOINT"`
 	ServiceAvailabilityCheckInterval          time.Duration `envvar:"TEST_SERVICE_AVAILABILITY_CHECK_INTERVAL" default:"250ms"`
 	APIGatewayAuthorizationType               string        `envvar:"TEST_API_GATEWAY_AUTHORIZATION_METHOD" default:"NONE"`

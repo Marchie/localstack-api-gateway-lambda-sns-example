@@ -9,8 +9,8 @@ platform:
 services:
   - name: docker
     image: docker:dind
-    privileged: true
     network_mode: host
+    privileged: true
     volumes:
       - name: dockersock
         path: /var/run
@@ -19,8 +19,6 @@ services:
 
   - name: localstack
     image: localstack/localstack:latest
-    depends_on:
-      - docker
     environment:
       SERVICES: apigateway,lambda,sns
       DEBUG: 0
@@ -90,7 +88,7 @@ steps:
       - name: godeps
         path: /go
     commands:
-      - export KUBERNETES_POD_ID=$(hostname -i)
+      - export KUBERNETES_POD_IP=$(hostname -i)
       - go test -v --tags="integration" -run TestAppIntegration ./app/.
 
 volumes:
